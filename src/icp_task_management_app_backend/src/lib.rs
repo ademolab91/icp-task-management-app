@@ -37,20 +37,12 @@ impl BoundedStorable for Task {
     const IS_FIXED_SIZE: bool = false;
 }
 
-thread_local! {
-    static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> = RefCell::new(
-        MemoryManager::init(DefaultMemoryImpl::default())
-    );
-
-    static ID_COUNTER: RefCell<IdCell> = RefCell::new(
-        IdCell::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))), 0)
-            .expect("Cannot create a counter")
-    );
-
-    static STORAGE: RefCell<StableBTreeMap<u64, Task, Memory>> =
-        RefCell::new(StableBTreeMap::init(
-            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1)))
-    ));
+lazy_static! {
+    static ref MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
+        RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
+    static ref ID_GENERATOR: RefCell<u64> = RefCell::new(0);
+    static ref STORAGE: RefCell<StableBTreeMap<u64, Task, Memory>> =
+        RefCell::new(StableBTreeMap::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1)))));
 }
 
 #[derive(candid::CandidType, Serialize, Deserialize, Default)]
@@ -62,7 +54,7 @@ struct TaskPayload {
 
 #[ic_cdk::query]
 fn get_task(id: u64) -> Result<Task, Error> {
-    match _get_task(&id) {
+    match STORAGE.with(|service| service.borrow().get(&id)) {
         Some(task) => Ok(task),
         None => Err(Error::NotFound {
             msg: format!("a task with id={} not found", id),
@@ -72,12 +64,16 @@ fn get_task(id: u64) -> Result<Task, Error> {
 
 #[ic_cdk::update]
 fn add_task(task: TaskPayload) -> Option<Task> {
-    let id = ID_COUNTER
-        .with(|counter| {
-            let current_value = *counter.borrow().get();
-            counter.borrow_mut().set(current_value + 1)
-        })
-        .expect("cannot increment id counter");
+    let id = ID_GENERATOR.with(|generator| {
+        let current_id = *generator.borrow();
+        *generator.borrow_mut() = current_id + 1;
+        current_id
+    });
+
+    if task.title.is_empty() || task.description.is_empty() {
+        return None;
+    }
+
     let new_task = Task {
         id,
         title: task.title,
@@ -87,7 +83,8 @@ fn add_task(task: TaskPayload) -> Option<Task> {
         created_at: time(),
         updated_at: None,
     };
-    do_insert_task(&new_task);
+
+    STORAGE.with(|service| service.borrow_mut().insert(new_task.id, new_task.clone()));
     Some(new_task)
 }
 
@@ -95,44 +92,16 @@ fn add_task(task: TaskPayload) -> Option<Task> {
 fn update_task(id: u64, payload: TaskPayload) -> Result<Task, Error> {
     match STORAGE.with(|service| service.borrow().get(&id)) {
         Some(mut task) => {
-            task.title = payload.title;
-            task.description = payload.description;
-            task.due_date = payload.due_date;
-            task.updated_at = Some(time());
-            do_insert_task(&task);
-            Ok(task)
-        }
-        None => Err(Error::NotFound {
-            msg: format!("couldn't update a task with id={}. task not found", id),
-        }),
-    }
-}
+            if !payload.title.is_empty() {
+                task.title = payload.title;
+            }
 
-// helper method to perform task insert.
-fn do_insert_task(task: &Task) {
-    STORAGE.with(|service| service.borrow_mut().insert(task.id, task.clone()));
-}
+            if !payload.description.is_empty() {
+                task.description = payload.description;
+            }
 
-#[ic_cdk::update]
-fn delete_task(id: u64) -> Result<Task, Error> {
-    match STORAGE.with(|service| service.borrow_mut().remove(&id)) {
-        Some(task) => Ok(task),
-        None => Err(Error::NotFound {
-            msg: format!("couldn't delete a task with id={}. task not found.", id),
-        }),
-    }
-}
+            if task.due_date != payload.due_date {
+                task.due_date = payload.due_date;
+            }
 
-#[derive(candid::CandidType, Deserialize, Serialize)]
-enum Error {
-    NotFound { msg: String },
-}
-
-// a helper method to get a task by id. used in get_task/update_task
-fn _get_task(id: &u64) -> Option<Task> {
-    STORAGE.with(|service| service.borrow().get(id))
-}
-
-// need this to generate candid
-ic_cdk::export_candid!();
-
+            task.updated
