@@ -23,7 +23,7 @@ npm run gen-deploy
 ```bash
 dfx canister call icp_task_management_app_backend add_task '(
   record {
-    title = "Complete you dacade task";
+    title = "Complete your dacade task";
     description = "Make sure you do it well and diligently!";
     due_date = "13-11-2023";
   }
@@ -40,7 +40,7 @@ dfx canister call icp_task_management_app_backend get_task '(0)'
 
 ```bash
 dfx canister call icp_task_management_app_backend update_task '(0, record {
-  	title = "Complete you dacade task (Updated!)";
+  	title = "Complete your dacade task (Updated!)";
     description = "Make sure you do it well and diligently! (Updated!)";
     due_date = "14-11-2023";
     completed = true;
