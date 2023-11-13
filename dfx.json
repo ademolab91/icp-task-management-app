@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "canisters": {
+    "icp_task_management_app_backend": {
+      "type": "rust",
+      "package": "icp_task_management_app_backend",
+      "candid": "src/icp_task_management_app_backend/icp_task_management_app_backend.did"
+    }
+  },
+  "output_env_file": ".env"
+}
