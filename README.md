@@ -1,5 +1,7 @@
 # ICP task management app
 
+This decentralized task management app on the Internet Computer network allows users to create, read, update, and delete tasks. Tasks have essential details like title, description, due date, and completion status. The smart contract ensures security and transparency in task management, leveraging the Internet Computer's stability and memory management features. Users can seamlessly organize and track tasks on the decentralized network.
+
 ## Features
 
 1. Add new task
